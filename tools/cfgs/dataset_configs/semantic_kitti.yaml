@@ -1,0 +1,21 @@
+DATASET: 'SemanticKitti'
+DATA_PATH: "/home/yanqiao/Documents/semantic-kitti/dataset/sequences/"
+
+dataset_params:
+  label_mapping: "/home/yanqiao/OpenPCDet/tools/cfgs/dataset_configs/label_mapping/semantic-kitti.yaml"
+  # 2D aug
+  bottom_crop:
+    - 1024
+    - 256
+  
+  max_volume_space:
+    - 50
+    - 50
+    - 2
+  min_volume_space:
+    - -50
+    - -50
+    - -4
+  
+train_params:
+  trainval: False
