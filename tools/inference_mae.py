@@ -210,7 +210,10 @@ def main():
     device = torch.device('cuda:0')
 
     model = build_network(model_cfg=cfg.MODEL, num_class=len(cfg.CLASS_NAMES), dataset=None)
-    model = load_params_with_optimizer(model, '/home/yanqiao/OpenPCDet/output/semantic_kitti_models/ckpt/checkpoint_epoch_100.pth')
+    if args.ckpt: 
+        model = load_params_with_optimizer(model, args.ckpt)
+    else:
+        model = load_params_with_optimizer(model, '/home/yanqiao/OpenPCDet/output/semantic_kitti_models/ckpt/checkpoint_epoch_100.pth')
     model.to(device)
     model.training = False
     root_dir = '/media/yanqiao/Seagate Hub/semantic-kitti/dataset/sequences/08/pred/'
@@ -220,139 +223,132 @@ def main():
             batch_dict = collect_data(i, cfg.DATA_CONFIG, device)
             pred_dicts, _ = model(batch_dict)
 
-            # saving img parts
-            plt.rcParams['figure.figsize'] = [32, 32]
-            plt.clf()
+            # # saving img parts
+            # plt.rcParams['figure.figsize'] = [32, 32]
+            # plt.clf()
 
-            plt.subplot(5, 1, 1)
-            img_raw = pred_dicts['img']
-            img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(img_raw)
-            plt.title('raw_img', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(5, 1, 1)
+            # img_raw = pred_dicts['img']
+            # img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(img_raw)
+            # plt.title('raw_img', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(5, 1, 2)
-            img_raw = pred_dicts['img_raw']
-            img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(img_raw)
-            plt.title('raw_interpolate', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(5, 1, 2)
+            # img_raw = pred_dicts['img_raw']
+            # img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(img_raw)
+            # plt.title('raw_interpolate', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(5, 1, 3)
-            im_masked = pred_dicts['im_masked']
-            im_masked = cv2.normalize(im_masked, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(im_masked)
-            plt.title('masked', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(5, 1, 3)
+            # im_masked = pred_dicts['im_masked']
+            # im_masked = cv2.normalize(im_masked, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(im_masked)
+            # plt.title('masked', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(5, 1, 4)
-            img_pred = pred_dicts['img_pred']
-            img_pred = cv2.normalize(img_pred, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(img_pred)
-            plt.title('reconstruction', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(5, 1, 4)
+            # img_pred = pred_dicts['img_pred']
+            # img_pred = cv2.normalize(img_pred, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(img_pred)
+            # plt.title('reconstruction', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(5, 1, 5)
-            im_paste = pred_dicts['im_paste']
-            im_paste = cv2.normalize(im_paste, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(im_paste)
-            plt.title('reconstruction + visible', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(5, 1, 5)
+            # im_paste = pred_dicts['im_paste']
+            # im_paste = cv2.normalize(im_paste, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(im_paste)
+            # plt.title('reconstruction + visible', fontsize=16)
+            # plt.axis('off')
 
-            file_name  = root_dir + 'IMG_' + '%06d.png' % i
-            plt.savefig(file_name)
+            # file_name  = root_dir + 'IMG_' + '%06d.png' % i
+            # plt.savefig(file_name)
 
 
-            # saving range parts
-            plt.rcParams['figure.figsize'] = [48, 48]
-            plt.clf()
+            # # saving range parts
+            # plt.rcParams['figure.figsize'] = [48, 48]
+            # plt.clf()
 
-            plt.subplot(6, 1, 1)
-            img_raw = pred_dicts['img']
-            img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(img_raw)
-            plt.title('raw_interpolate', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(6, 1, 1)
+            # img_raw = pred_dicts['img']
+            # img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(img_raw)
+            # plt.title('raw_interpolate', fontsize=16)
+            # plt.axis('off')
             
-            plt.subplot(6, 1, 2)
-            img_raw = pred_dicts['img_raw']
-            img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(img_raw)
-            plt.title('raw_interpolate', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(6, 1, 2)
+            # img_raw = pred_dicts['img_raw']
+            # img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(img_raw)
+            # plt.title('raw_interpolate', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(6, 1, 3)
-            range_roi_raw = pred_dicts['range_roi_raw'][:, :, 0]
-            range_roi_raw = cv2.normalize(range_roi_raw, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(range_roi_raw)
-            plt.title('range_roi_raw', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(6, 1, 3)
+            # range_roi_raw = pred_dicts['range_roi_raw'][:, :, 0]
+            # range_roi_raw = cv2.normalize(range_roi_raw, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(range_roi_raw)
+            # plt.title('range_roi_raw', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(6, 1, 4)
-            range_roi_masked = pred_dicts['range_roi_masked'][:, :, 0]
-            range_roi_masked = cv2.normalize(range_roi_masked, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(range_roi_masked)
-            plt.title('range_roi_masked', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(6, 1, 4)
+            # range_roi_masked = pred_dicts['range_roi_masked'][:, :, 0]
+            # range_roi_masked = cv2.normalize(range_roi_masked, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(range_roi_masked)
+            # plt.title('range_roi_masked', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(6, 1, 5)
-            range_roi_pred = pred_dicts['range_roi_pred'][:, :, 0]
-            range_roi_pred = cv2.normalize(range_roi_pred, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(range_roi_pred)
-            plt.title('reconstruction', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(6, 1, 5)
+            # range_roi_pred = pred_dicts['range_roi_pred'][:, :, 0]
+            # range_roi_pred = cv2.normalize(range_roi_pred, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(range_roi_pred)
+            # plt.title('reconstruction', fontsize=16)
+            # plt.axis('off')
 
-            plt.subplot(6, 1, 6)
-            range_roi_paste = pred_dicts['range_roi_paste'][:, :, 0]
-            range_roi_paste = cv2.normalize(range_roi_paste, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(range_roi_paste)
-            plt.title('reconstruction + visible', fontsize=16)
-            plt.axis('off')
+            # plt.subplot(6, 1, 6)
+            # range_roi_paste = pred_dicts['range_roi_paste'][:, :, 0]
+            # range_roi_paste = cv2.normalize(range_roi_paste, None, 0, 1, cv2.NORM_MINMAX)
+            # plt.imshow(range_roi_paste)
+            # plt.title('reconstruction + visible', fontsize=16)
+            # plt.axis('off')
 
-            file_name  = root_dir + 'RANGE_ROI_' + '%06d.png' % i
-            plt.savefig(file_name)
+            # file_name  = root_dir + 'RANGE_ROI_' + '%06d.png' % i
+            # plt.savefig(file_name)
 
 
             # saving range full parts
             plt.rcParams['figure.figsize'] = [48, 48]
             plt.clf()
 
-            plt.subplot(6, 1, 1)
+            plt.subplot(5, 1, 1)
             img_raw = pred_dicts['img']
             img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
             plt.imshow(img_raw)
             plt.title('raw_interpolate', fontsize=16)
             plt.axis('off')
-            
-            plt.subplot(6, 1, 2)
-            img_raw = pred_dicts['img_raw']
-            img_raw = cv2.normalize(img_raw, None, 0, 1, cv2.NORM_MINMAX)
-            plt.imshow(img_raw)
-            plt.title('raw_interpolate', fontsize=16)
-            plt.axis('off')
 
-            plt.subplot(6, 1, 3)
+            plt.subplot(5, 1, 2)
             range_raw = pred_dicts['range_raw'][:, :, 0]
             range_raw = cv2.normalize(range_raw, None, 0, 1, cv2.NORM_MINMAX)
             plt.imshow(range_raw)
             plt.title('range_raw', fontsize=16)
             plt.axis('off')
 
-            plt.subplot(6, 1, 4)
+            plt.subplot(5, 1, 3)
             range_masked = pred_dicts['range_masked'][:, :, 0]
             range_masked = cv2.normalize(range_masked, None, 0, 1, cv2.NORM_MINMAX)
             plt.imshow(range_masked)
             plt.title('range_masked', fontsize=16)
             plt.axis('off')
 
-            plt.subplot(6, 1, 5)
+            plt.subplot(5, 1, 4)
             range_pred = pred_dicts['range_pred'][:, :, 0]
             range_pred = cv2.normalize(range_pred, None, 0, 1, cv2.NORM_MINMAX)
             plt.imshow(range_pred)
             plt.title('reconstruction', fontsize=16)
             plt.axis('off')
 
-            plt.subplot(6, 1, 6)
+            plt.subplot(5, 1, 5)
             range_paste = pred_dicts['range_paste'][:, :, 0]
             range_paste = cv2.normalize(range_paste, None, 0, 1, cv2.NORM_MINMAX)
             plt.imshow(range_paste)

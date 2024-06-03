@@ -5,12 +5,11 @@ DATA_CONFIG:
 
 
 MODEL:
-    NAME: MAE_V2
-
+    NAME: MAE_Image
     
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 1
+    BATCH_SIZE_PER_GPU: 8
     NUM_EPOCHS: 100
 
     OPTIMIZER: adam_onecycle

@@ -5,13 +5,13 @@ DATA_CONFIG:
 
 
 MODEL:
-    NAME: MAE
+    NAME: MAE_Range
 
     
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 2
-    NUM_EPOCHS: 100
+    BATCH_SIZE_PER_GPU: 10
+    NUM_EPOCHS: 200
 
     OPTIMIZER: adam_onecycle
     LR: 1.5e-4

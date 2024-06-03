@@ -15,7 +15,7 @@ from .pillarnet import PillarNet
 from .voxelnext import VoxelNeXt
 from .transfusion import TransFusion
 from .bevfusion import BevFusion
-from .mae import MAE, MAE_V2
+from .mae import MAE, MAE_V2, MAE_Range, MAE_Image
 __all__ = {
     'Detector3DTemplate': Detector3DTemplate,
     'SECONDNet': SECONDNet,
@@ -37,6 +37,8 @@ __all__ = {
     'BevFusion': BevFusion,
     'MAE': MAE,
     'MAE_V2': MAE_V2,
+    'MAE_Range': MAE_Range,
+    'MAE_Image': MAE_Image,
 }
 
 

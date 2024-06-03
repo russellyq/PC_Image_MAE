@@ -15,6 +15,13 @@ import cv2
 from pathlib import Path
 import yaml
 
+def min_max_scaling(x: np.ndarray) -> np.ndarray:
+    x_min, x_max = x.min(), x.max()
+    x -= x_min
+    x /= (x_max - x_min) + np.finfo(np.float32).eps
+
+    return x
+
 REGISTERED_PC_DATASET_CLASSES = {}
 
 
@@ -364,6 +371,12 @@ class SemanticKitti(torch_data.Dataset):
         data_dict['laser_y'] = out_dict['y']
         data_dict['laser_x'] = out_dict['x']
         data_dict['laser_points'] = out_dict['points']
+
+        # need to normalize laser_range_in:
+
+        data_dict['laser_range_in'] = min_max_scaling(data_dict['laser_range_in'])
+
+
 
 
         # # cropping image for processing

@@ -188,12 +188,12 @@ class MaskedAutoencoderViT(nn.Module):
         # initialize nn.Linear and nn.LayerNorm
         self.apply(self._init_weights)
 
-        model_checkpoint= torch.load('/home/yanqiao/2DPASS/pretrained/mae_pretrain_vit_large.pth')
-        model_state_dict = model_checkpoint['model']
-        for param in self.state_dict():
-            if param in model_state_dict and self.state_dict()[param].size() == model_state_dict[param].size():
-                self.state_dict()[param] = model_state_dict[param]
-                print('initing with param: ', param)
+        # model_checkpoint= torch.load('/home/yanqiao/2DPASS/pretrained/mae_pretrain_vit_large.pth')
+        # model_state_dict = model_checkpoint['model']
+        # for param in self.state_dict():
+        #     if param in model_state_dict and self.state_dict()[param].size() == model_state_dict[param].size():
+        #         self.state_dict()[param] = model_state_dict[param]
+        #         print('initing with param: ', param)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -227,13 +227,14 @@ class MaskedAutoencoderViT(nn.Module):
         x: (N, L, patch_size**2 *3)
         imgs: (N, 3, H, W)
         """
-        p = self.patch_embed.patch_size[0]
+        p1 = self.patch_embed.patch_size[0]
+        p2 = self.patch_embed.patch_size[1]
         # h = w = int(x.shape[1]**.5)
         assert h * w == x.shape[1]
         
-        x = x.reshape(shape=(x.shape[0], h, w, p, p, C))
+        x = x.reshape(shape=(x.shape[0], h, w, p1, p2, C))
         x = torch.einsum('nhwpqc->nchpwq', x)
-        imgs = x.reshape(shape=(x.shape[0], C, h * p, w * p))
+        imgs = x.reshape(shape=(x.shape[0], C, h * p1, w * p2))
         return imgs
 
     def random_masking(self, x, mask_ratio):
@@ -413,6 +414,12 @@ def mae_vit_large_patch16_dec512d8b(**kwargs):
         mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     return model
 
+def mae_vit_large_patch8_dec512d8b(**kwargs):
+    model = MaskedAutoencoderViT(
+        patch_size=8, embed_dim=1024, depth=24, num_heads=16,
+        decoder_embed_dim=512, decoder_depth=8, decoder_num_heads=16,
+        mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
+    return model
 
 def mae_vit_huge_patch14_dec512d8b(**kwargs):
     model = MaskedAutoencoderViT(
@@ -426,3 +433,4 @@ def mae_vit_huge_patch14_dec512d8b(**kwargs):
 mae_vit_base_patch16 = mae_vit_base_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
 mae_vit_large_patch16 = mae_vit_large_patch16_dec512d8b  # decoder: 512 dim, 8 blocks
 mae_vit_huge_patch14 = mae_vit_huge_patch14_dec512d8b  # decoder: 512 dim, 8 blocks
+mae_vit_large_patch8 = mae_vit_large_patch8_dec512d8b  # decoder: 512 dim, 8 blocks
