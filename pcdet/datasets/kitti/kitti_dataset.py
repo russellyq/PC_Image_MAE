@@ -14,6 +14,32 @@ from .laserscan import LaserScan
 import cv2
 from pathlib import Path
 import yaml
+import random
+
+def make_random_range_mask(pathch_size_h=8, patch_size_w=8, H=64, W=1024, mask_ratio=0.75):
+    t_or_f_h = []
+    for i in range(pathch_size_h):
+        t_or_f_w = []
+        t_or_f = []
+        w_mask_len = int( W // patch_size_w * mask_ratio)
+        w_unmask_len = int( W // patch_size_w * ( 1 - mask_ratio ))
+        for i in range(w_mask_len):
+            t_or_f.append(False)
+        for i in range(w_unmask_len):
+            t_or_f.append(True)
+        
+        random.shuffle(t_or_f)
+        t_or_f = np.asarray(t_or_f)
+        t_or_f = t_or_f.repeat(patch_size_w)
+        t_or_f = t_or_f.reshape(1, -1)
+        for i in range(patch_size_w):
+            t_or_f_w.append(t_or_f)
+        t_or_f_w = np.concatenate(t_or_f_w, axis=0)
+        
+        t_or_f_h.append(t_or_f_w)
+    t_or_f_h = np.concatenate(t_or_f_h, axis=0)
+    return t_or_f_h
+
 
 def min_max_scaling(x: np.ndarray) -> np.ndarray:
     x_min, x_max = x.min(), x.max()
@@ -332,7 +358,7 @@ class SemanticKitti(torch_data.Dataset):
         # print('point2img_index:, ', point2img_index.shape) # (N_, )
         # print('keep_idx:, ', keep_idx.shape) # (N, )
         # # print('img_points:, ', img_points.shape) # (N_img, 2)
-        # # from IPython import embed; embed()
+        # # 
         # if self.fov_only:
         #     xyz = xyz[keep_idx]
         #     data = data[keep_idx]
@@ -372,13 +398,6 @@ class SemanticKitti(torch_data.Dataset):
         data_dict['laser_x'] = out_dict['x']
         data_dict['laser_points'] = out_dict['points']
 
-        # need to normalize laser_range_in:
-
-        data_dict['laser_range_in'] = min_max_scaling(data_dict['laser_range_in'])
-
-
-
-
         # # cropping image for processing
         # left = self.dataset_cfg['bottom_crop']['left']
         # right = self.dataset_cfg['bottom_crop']['right']
@@ -406,6 +425,13 @@ class SemanticKitti(torch_data.Dataset):
         # data_dict['depth_img'] = depth_image
 
         # data_dict['calib'] = self.calib
+
+        from IPython import embed; embed()
+        t_or_f_range_img = make_random_range_mask()
+        t_or_f_point = t_or_f_range_img[out_dict['y'], out_dict['x']]
+        data_dict['sample_points'] = points[t_or_f_point]
+        data_dict['sample_index'] = np.arrange(len(data))[t_or_f_point]
+
 
 
         return data_dict
