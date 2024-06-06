@@ -262,7 +262,23 @@ class SemanticKitti(torch_data.Dataset):
                     ret[key] = np.stack(points, axis=0)
                 elif key in ['camera_imgs']:
                     ret[key] = torch.stack([torch.stack(imgs,dim=0) for imgs in val],dim=0)
+                elif key in ['point2img_index', 'points_img', 'sample_index', 'unsample_index']:
+                    ret[key] = [torch.from_numpy(values).long() for values in val]
+                elif key in ['sample_points', 'spconv_points']:
+                    ret[key] = torch.cat( [torch.from_numpy(values) for values in val] ).float()
+                    
+                    key = key + '_batch_idx'
+                    coors = []
+                    if isinstance(val[0], list):
+                        val =  [i for item in val for i in item]
+                    for i, coor in enumerate(val):
+                        coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
+                        coors.append(coor_pad)
+                    ret[key] = np.concatenate(coors, axis=0)
+
                 else:
+                    print('key: ', key)
+                    print('val: ', val)
                     ret[key] = np.stack(val, axis=0)
             except:
                 print('Error in collate_batch: key=%s' % key)
@@ -317,12 +333,6 @@ class SemanticKitti(torch_data.Dataset):
         image = image.astype(np.float32)
         image /= 255.0
 
-        ###### depth file:
-        depth_image_file = self.im_idx[index].replace('velodyne', 'depth_2').replace('.bin', '.png')
-        depth_image = io.imread(depth_image_file)
-        depth_image = depth_image.astype(np.float32)
-        depth_image /= 255.0
-
         proj_matrix = self.proj_matrix[int(self.im_idx[index][-22:-20])]
 
         data = raw_data.copy()
@@ -353,18 +363,6 @@ class SemanticKitti(torch_data.Dataset):
         points_img = img_points[keep_idx_img_pts]
 
         point2img_index = np.arange(len(xyz))[keep_idx]
-        # print('\ndata:, ', data.shape) # (N, 3)
-        # print('xyz:, ', xyz.shape) # (N, 3)
-        # print('point2img_index:, ', point2img_index.shape) # (N_, )
-        # print('keep_idx:, ', keep_idx.shape) # (N, )
-        # # print('img_points:, ', img_points.shape) # (N_img, 2)
-        # # 
-        # if self.fov_only:
-        #     xyz = xyz[keep_idx]
-        #     data = data[keep_idx]
-        #     ref_pc = ref_pc[keep_idx]
-        #     ref_index = ref_index[keep_idx]
-        # print('data_index:, ', data.shape) # (N-keep_indx, 3)
 
         # crop image for processing:
         left = ( image.shape[1] - self.bottom_crop[0] ) // 2
@@ -397,6 +395,13 @@ class SemanticKitti(torch_data.Dataset):
         data_dict['laser_y'] = out_dict['y']
         data_dict['laser_x'] = out_dict['x']
         data_dict['laser_points'] = out_dict['points']
+        data_dict['point2img_index'] = point2img_index
+        data_dict['points_img'] = points_img
+
+        # print('\npoint2img_index', point2img_index.shape)
+        # print('points_img', points_img.shape)
+
+        # print('\n')
 
         # # cropping image for processing
         # left = self.dataset_cfg['bottom_crop']['left']
@@ -419,18 +424,23 @@ class SemanticKitti(torch_data.Dataset):
         img_indices = points_img.astype(np.int64)
 
         
-        data_dict['points'] = points
+        data_dict['points'] = data
         data_dict['images'] = image
         # data_dict['proj_matrix'] = proj_matrix
         # data_dict['depth_img'] = depth_image
 
         # data_dict['calib'] = self.calib
 
-        from IPython import embed; embed()
+        
         t_or_f_range_img = make_random_range_mask()
-        t_or_f_point = t_or_f_range_img[out_dict['y'], out_dict['x']]
-        data_dict['sample_points'] = points[t_or_f_point]
-        data_dict['sample_index'] = np.arrange(len(data))[t_or_f_point]
+        # print('t_or_f_range_img:', t_or_f_range_img)
+        # print('out_dict_y:', out_dict['y'])
+        # print('out_dict_x:', out_dict['x'])
+        t_or_f_point = t_or_f_range_img[out_dict['y'].astype(np.int16), out_dict['x'].astype(np.int16)]
+        data_dict['sample_points'] = data[t_or_f_point]
+        data_dict['sample_index'] = np.arange(len(data))[t_or_f_point]
+        data_dict['unsample_index'] = np.arange(len(data))[np.invert(t_or_f_point)]
+        data_dict['spconv_points'] = data
 
 
 
@@ -929,3 +939,4 @@ if __name__ == '__main__':
             data_path=ROOT_DIR,
             save_path=ROOT_DIR 
         )
+

@@ -1,4 +1,3 @@
-
 import torch
 import torch_scatter
 import torch.nn as nn
@@ -20,17 +19,20 @@ class voxelization(nn.Module):
         return idx.long()
 
     def forward(self, data_dict):
-        pc = data_dict['points'][:, :3]
+        device = data_dict['spconv_points_batch_idx'][:, 0].device
+        data_dict['spconv_points'] = data_dict['spconv_points'].to(device)
+        data_dict['sample_points'] = data_dict['sample_points'].to(device)
+        pc = data_dict['spconv_points'][:, :3]
 
         for idx, scale in enumerate(self.scale_list):
-            xidx = self.sparse_quantize(pc[:, 0], self.coors_range_xyz[0], np.ceil(self.spatial_shape[0] / scale))
-            yidx = self.sparse_quantize(pc[:, 1], self.coors_range_xyz[1], np.ceil(self.spatial_shape[1] / scale))
-            zidx = self.sparse_quantize(pc[:, 2], self.coors_range_xyz[2], np.ceil(self.spatial_shape[2] / scale))
-
-            bxyz_indx = torch.stack([data_dict['batch_idx'], xidx, yidx, zidx], dim=-1).long()
+            xidx = self.sparse_quantize(pc[:, 0], self.coors_range_xyz[0], np.ceil(self.spatial_shape[0] / scale)).to(device)
+            yidx = self.sparse_quantize(pc[:, 1], self.coors_range_xyz[1], np.ceil(self.spatial_shape[1] / scale)).to(device)
+            zidx = self.sparse_quantize(pc[:, 2], self.coors_range_xyz[2], np.ceil(self.spatial_shape[2] / scale)).to(device)
+            
+            bxyz_indx = torch.stack([data_dict['spconv_points_batch_idx'][:, 0], xidx, yidx, zidx], dim=-1).long()
             unq, unq_inv, unq_cnt = torch.unique(bxyz_indx, return_inverse=True, return_counts=True, dim=0)
             unq = torch.cat([unq[:, 0:1], unq[:, [3, 2, 1]]], dim=1)
-            data_dict['scale_{}'.format(scale)] = {
+            data_dict['spconv_points_scale_{}'.format(scale)] = {
                 'full_coors': bxyz_indx,
                 'coors_inv': unq_inv,
                 'coors': unq.type(torch.int32)
@@ -43,18 +45,19 @@ class voxelization(nn.Module):
                 yidx = self.sparse_quantize(pc[:, 1], self.coors_range_xyz[1], np.ceil(self.spatial_shape[1] / scale))
                 zidx = self.sparse_quantize(pc[:, 2], self.coors_range_xyz[2], np.ceil(self.spatial_shape[2] / scale))
 
-                bxyz_indx = torch.stack([data_dict['batch_idx'], xidx, yidx, zidx], dim=-1).long()
+                bxyz_indx = torch.stack([data_dict['sample_points_batch_idx'][:, 0], xidx, yidx, zidx], dim=-1).long()
                 unq, unq_inv, unq_cnt = torch.unique(bxyz_indx, return_inverse=True, return_counts=True, dim=0)
                 unq = torch.cat([unq[:, 0:1], unq[:, [3, 2, 1]]], dim=1)
                 data_dict['sample_points_scale_{}'.format(scale)] = {
-                    'sample_points_full_coors': bxyz_indx,
-                    'sample_points_coors_inv': unq_inv,
-                    'sample_points_coors': unq.type(torch.int32)
+                    'full_coors': bxyz_indx,
+                    'coors_inv': unq_inv,
+                    'coors': unq.type(torch.int32)
                 }
         return data_dict
 
 
 class voxel_3d_generator(nn.Module):
+
     def __init__(self, in_channels, out_channels, coors_range_xyz, spatial_shape, sample_points=False):
         super(voxel_3d_generator, self).__init__()
         self.spatial_shape = spatial_shape
@@ -82,27 +85,29 @@ class voxel_3d_generator(nn.Module):
 
     def forward(self, data_dict):
         pt_fea = self.prepare_input(
-            data_dict['points'],
-            data_dict['scale_1']['full_coors'][:, 1:],
-            data_dict['scale_1']['coors_inv']
+            data_dict['spconv_points'],
+            data_dict['spconv_points_scale_1']['full_coors'][:, 1:],
+            data_dict['spconv_points_scale_1']['coors_inv']
         )
+        device = data_dict['points'].device
+        pt_fea = pt_fea.to(device)
         pt_fea = self.PPmodel(pt_fea)
 
-        features = torch_scatter.scatter_mean(pt_fea, data_dict['scale_1']['coors_inv'], dim=0)
-        data_dict['sparse_tensor'] = spconv.SparseConvTensor(
+        features = torch_scatter.scatter_mean(pt_fea, data_dict['spconv_points_scale_1']['coors_inv'], dim=0)
+        data_dict['spconv_points_sparse_tensor'] = spconv.SparseConvTensor(
             features=features,
-            indices=data_dict['scale_1']['coors'].int(),
+            indices=data_dict['spconv_points_scale_1']['coors'].int(),
             spatial_shape=np.int32(self.spatial_shape)[::-1].tolist(),
             batch_size=data_dict['batch_size']
         )
 
-        data_dict['coors'] = data_dict['scale_1']['coors']
-        data_dict['coors_inv'] = data_dict['scale_1']['coors_inv']
-        data_dict['full_coors'] = data_dict['scale_1']['full_coors']
+        data_dict['spconv_points_coors'] = data_dict['spconv_points_scale_1']['coors']
+        data_dict['spconv_points_coors_inv'] = data_dict['spconv_points_scale_1']['coors_inv']
+        data_dict['spconv_points_full_coors'] = data_dict['spconv_points_scale_1']['full_coors']
 
         if self.sample_points:
             pt_fea = self.prepare_input(
-            data_dict['sample_points_points'],
+            data_dict['sample_points'],
             data_dict['sample_points_scale_1']['full_coors'][:, 1:],
             data_dict['sample_points_scale_1']['coors_inv']
             )
