@@ -351,7 +351,7 @@ class MaskedAutoencoderViT(nn.Module):
         pred_img = self.unpatchify(pred, h=16, w=64)
         data_dict['pred_img'] = pred_img
 
-        loss = self.forward_loss(imgs, pred, mask)
+        loss, _ = self.forward_loss(imgs, pred, mask)
 
         # print('latent:', latent.size())
         # print('mask:', mask.size())

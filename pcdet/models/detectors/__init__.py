@@ -17,6 +17,8 @@ from .transfusion import TransFusion
 from .bevfusion import BevFusion
 from .mae import MAE, MAE_Range, MAE_Image
 from .model_mae_spv import SPVCNN_MAE
+
+from pcdet.models.segmentor.MAE_seg import MAE_Seg
 __all__ = {
     'Detector3DTemplate': Detector3DTemplate,
     'SECONDNet': SECONDNet,
@@ -40,6 +42,7 @@ __all__ = {
     'MAE_Range': MAE_Range,
     'MAE_Image': MAE_Image,
     'SPVCNN_MAE': SPVCNN_MAE,
+    'MAE_Seg': MAE_Seg,
 }
 
 

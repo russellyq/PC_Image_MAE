@@ -29,7 +29,7 @@ class MAE(nn.Module):
         self.range_img_size = (64, 1024)
 
         self.image_encoder = mae_vit_large_patch16(in_chans=3, img_with_size=self.img_size, out_chans=3, with_patch_2d=False)
-        self.range_encoder = mae_vit_large_patch16(in_chans=5, img_with_size=self.range_img_size, out_chans=5, with_patch_2d=(8, 8))
+        self.range_encoder = mae_vit_large_patch16(in_chans=5, img_with_size=self.range_img_size, out_chans=5, with_patch_2d=(2, 8))
 
         self.img_patch_size = (self.image_encoder.patch_embed.patch_size[0], self.image_encoder.patch_embed.patch_size[1])
         self.range_patch_size = (self.range_encoder.patch_embed.patch_size[0], self.range_encoder.patch_embed.patch_size[1])
@@ -98,7 +98,7 @@ class MAE(nn.Module):
         # img_ids_restore: (B, L=H*W/16/16=1024)
 
         range_latent, range_mask, range_ids_restore = self.range_encoder.forward_encoder(laser_range_in, self.range_mask_ratio)
-        range_latent_full, range_mask_full, range_ids_restore_full = self.range_encoder.forward_encoder(laser_range_in, self.range_mask_ratio)
+        range_latent_full, range_mask_full, range_ids_restore_full = self.range_encoder.forward_encoder(laser_range_in, 0)
 
         img_latent_full_cls, img_mask_full_tokens_cls_unpatch, range_latent_full_cls, range_mask_full_tokens_cls_unpatch = self.forward_patchfy_unpatchfy_img_range(img_latent_full, img_mask_full, img_ids_restore_full,
                                                                                                                         range_latent_full, range_mask_full, range_ids_restore_full)
@@ -130,8 +130,6 @@ class MAE(nn.Module):
                                         self.image_encoder.decoder_norm,
                                         self.image_encoder.decoder_pred)
         
-
-        
         range_pred = self.forward_decoder(range_latent, range_ids_restore, img_token_2_range,
                                         self.range_encoder.decoder_embed,
                                         self.range_encoder.mask_token,
@@ -141,7 +139,7 @@ class MAE(nn.Module):
                                         self.range_encoder.decoder_pred)   
 
         img_loss = self.image_encoder.forward_loss(images, img_pred, img_mask)
-        range_loss = self.range_encoder.forward_loss(laser_range_in, range_pred, range_mask, patch_size=(4, 16))
+        range_loss = self.range_encoder.forward_loss(laser_range_in, range_pred, range_mask, patch_size=(2, 8))
 
         loss = range_loss + img_loss
 
@@ -160,25 +158,19 @@ class MAE(nn.Module):
             # inference at batch_size=1
             pred_dicts, recall_dicts = {}, {}
 
-            # pred_dicts['img_pred'] = self.image_encoder.unpatchify(img_pred, h=4, w=64).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['img_mask'] = self.image_encoder.unpatchify(img_mask.unsqueeze(-1).repeat(1, 1, self.image_encoder.patch_embed.patch_size[0]**2 *3), h=4, w=64).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['img'] = raw_images.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['img_raw'] = images.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['im_masked'] = pred_dicts['img_raw'] * (1 - pred_dicts['img_mask'])
-            # pred_dicts['im_paste'] = pred_dicts['im_masked'] + pred_dicts['img_pred'] * pred_dicts['img_mask']
+            pred_dicts['img_pred'] = self.image_encoder.unpatchify(img_pred, h=16, w=64).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['img_mask'] = self.image_encoder.unpatchify(img_mask.unsqueeze(-1).repeat(1, 1, self.image_encoder.patch_embed.patch_size[0]**2 *3), h=16, w=64).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['img'] = raw_images.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['img_raw'] = images.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['im_masked'] = pred_dicts['img_raw'] * (1 - pred_dicts['img_mask'])
+            pred_dicts['im_paste'] = pred_dicts['im_masked'] + pred_dicts['img_pred'] * pred_dicts['img_mask']
 
-            # pred_dicts['range_roi_pred'] = self.range_encoder.unpatchify(range_pred, h=4, w=64, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['range_roi_mask'] = self.range_encoder.unpatchify(range_mask_roi.unsqueeze(-1).repeat(1, 1, self.range_encoder.patch_embed.patch_size[0]**2 *5), h=4, w=64, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['range_roi_raw'] = laser_range_in_roi.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['range_roi_masked'] = pred_dicts['range_roi_raw'] * (1 - pred_dicts['range_roi_mask'])
-            # pred_dicts['range_roi_paste'] = pred_dicts['range_roi_masked'] + pred_dicts['range_roi_pred'] * pred_dicts['range_roi_mask']
-            
-            
-            # pred_dicts['range_pred'] = self.range_encoder.unpatchify(range_pred, h=4, w=64, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['range_mask'] = self.range_encoder.unpatchify(range_mask.unsqueeze(-1).repeat(1, 1, self.range_encoder.patch_embed.patch_size[0]**2 *5), h=4, w=64, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['range_raw'] = laser_range_in.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            # pred_dicts['range_masked'] = pred_dicts['range_raw'] * (1 - pred_dicts['range_mask'])
-            # pred_dicts['range_paste'] = pred_dicts['range_masked'] + pred_dicts['range_pred'] * pred_dicts['range_mask']
+
+            pred_dicts['range_pred'] = self.range_encoder.unpatchify(range_pred, h=8, w=128, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['range_mask'] = self.range_encoder.unpatchify(range_mask.unsqueeze(-1).repeat(1, 1, self.range_encoder.patch_embed.patch_size[0]**2 *5), h=8, w=128, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['range_raw'] = laser_range_in.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['range_masked'] = pred_dicts['range_raw'] * (1 - pred_dicts['range_mask'])
+            pred_dicts['range_paste'] = pred_dicts['range_masked'] + pred_dicts['range_pred'] * pred_dicts['range_mask']
 
             # from IPython import embed; embed()
 
@@ -257,7 +249,7 @@ class MAE(nn.Module):
 
             if key in state_dict and state_dict[key].shape == val.shape:
                 update_model_state[key] = val
-                # logger.info('Update weight %s: %s' % (key, str(val.shape)))
+                print('Update weight %s: %s' % (key, str(val.shape)))
 
         if strict:
             self.load_state_dict(update_model_state)
@@ -270,7 +262,7 @@ class MAE(nn.Module):
         if not os.path.isfile(filename):
             raise FileNotFoundError
 
-        logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
+        print('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
         checkpoint = torch.load(filename, map_location=loc_type)
         model_state_disk = checkpoint['model_state']
@@ -281,21 +273,21 @@ class MAE(nn.Module):
             
         version = checkpoint.get("version", None)
         if version is not None:
-            logger.info('==> Checkpoint trained from version: %s' % version)
+            print('==> Checkpoint trained from version: %s' % version)
 
         state_dict, update_model_state = self._load_state_dict(model_state_disk, strict=False)
 
         for key in state_dict:
             if key not in update_model_state:
-                logger.info('Not updated weight %s: %s' % (key, str(state_dict[key].shape)))
+                print('Not updated weight %s: %s' % (key, str(state_dict[key].shape)))
 
-        logger.info('==> Done (loaded %d/%d)' % (len(update_model_state), len(state_dict)))
+        # print('==> Done (loaded %d/%d)' % (len(update_model_state), len(state_dict)))
 
     def load_params_with_optimizer(self, filename, to_cpu=False, optimizer=None, logger=None):
         if not os.path.isfile(filename):
             raise FileNotFoundError
 
-        logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
+        # print('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
         checkpoint = torch.load(filename, map_location=loc_type)
         epoch = checkpoint.get('epoch', -1)
@@ -305,7 +297,7 @@ class MAE(nn.Module):
 
         if optimizer is not None:
             if 'optimizer_state' in checkpoint and checkpoint['optimizer_state'] is not None:
-                logger.info('==> Loading optimizer parameters from checkpoint %s to %s'
+                print('==> Loading optimizer parameters from checkpoint %s to %s'
                             % (filename, 'CPU' if to_cpu else 'GPU'))
                 optimizer.load_state_dict(checkpoint['optimizer_state'])
             else:
@@ -318,7 +310,7 @@ class MAE(nn.Module):
 
         if 'version' in checkpoint:
             print('==> Checkpoint trained from version: %s' % checkpoint['version'])
-        logger.info('==> Done')
+        print('==> Done')
 
         return it, epoch
 
@@ -339,7 +331,7 @@ class MAE_Range(nn.Module):
 
         self.range_encoder = mae_vit_large_patch16(in_chans=5, img_with_size=self.range_img_size, out_chans=5, with_patch_2d=(8, 8))
         self.range_patch_size = (self.range_encoder.patch_embed.patch_size[0], self.range_encoder.patch_embed.patch_size[1])
-
+        self.img_size = (256, 1024)
 
     @property
     def mode(self):
@@ -358,6 +350,7 @@ class MAE_Range(nn.Module):
         # B = batch_dict['batch_size']
         Batch_size, _, H_raw, W_raw = raw_images.size() # (256, 1024)
 
+        images = torch.nn.functional.interpolate(raw_images, size=self.img_size, mode='bilinear')
 
         range_latent, range_mask, range_ids_restore = self.range_encoder.forward_encoder(laser_range_in, self.range_mask_ratio)
 
@@ -390,10 +383,12 @@ class MAE_Range(nn.Module):
             # inference at batch_size=1
             pred_dicts, recall_dicts = {}, {}
 
-
             pred_dicts['img'] = raw_images.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            pred_dicts['range_pred'] = self.range_encoder.unpatchify(range_pred, h=16, w=64, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
-            pred_dicts['range_mask'] = self.range_encoder.unpatchify(range_mask.unsqueeze(-1).repeat(1, 1, self.range_encoder.patch_embed.patch_size[0]*self.range_encoder.patch_embed.patch_size[1] *5), h=16, w=64, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['img_raw'] = images.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+
+
+            pred_dicts['range_pred'] = self.range_encoder.unpatchify(range_pred, h=8, w=128, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
+            pred_dicts['range_mask'] = self.range_encoder.unpatchify(range_mask.unsqueeze(-1).repeat(1, 1, self.range_encoder.patch_embed.patch_size[0]**2 *5), h=8, w=128, C=5).permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
             pred_dicts['range_raw'] = laser_range_in.permute(0,2,3,1).squeeze(0).detach().cpu().numpy()
             pred_dicts['range_masked'] = pred_dicts['range_raw'] * (1 - pred_dicts['range_mask'])
             pred_dicts['range_paste'] = pred_dicts['range_masked'] + pred_dicts['range_pred'] * pred_dicts['range_mask']
@@ -473,7 +468,7 @@ class MAE_Range(nn.Module):
 
             if key in state_dict and state_dict[key].shape == val.shape:
                 update_model_state[key] = val
-                # logger.info('Update weight %s: %s' % (key, str(val.shape)))
+                # print('Update weight %s: %s' % (key, str(val.shape)))
 
         if strict:
             self.load_state_dict(update_model_state)
@@ -486,7 +481,7 @@ class MAE_Range(nn.Module):
         if not os.path.isfile(filename):
             raise FileNotFoundError
 
-        logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
+        print('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
         checkpoint = torch.load(filename, map_location=loc_type)
         model_state_disk = checkpoint['model_state']
@@ -497,21 +492,21 @@ class MAE_Range(nn.Module):
             
         version = checkpoint.get("version", None)
         if version is not None:
-            logger.info('==> Checkpoint trained from version: %s' % version)
+            print('==> Checkpoint trained from version: %s' % version)
 
         state_dict, update_model_state = self._load_state_dict(model_state_disk, strict=False)
 
         for key in state_dict:
             if key not in update_model_state:
-                logger.info('Not updated weight %s: %s' % (key, str(state_dict[key].shape)))
+                print('Not updated weight %s: %s' % (key, str(state_dict[key].shape)))
 
-        logger.info('==> Done (loaded %d/%d)' % (len(update_model_state), len(state_dict)))
+        print('==> Done (loaded %d/%d)' % (len(update_model_state), len(state_dict)))
 
     def load_params_with_optimizer(self, filename, to_cpu=False, optimizer=None, logger=None):
         if not os.path.isfile(filename):
             raise FileNotFoundError
 
-        logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
+        print('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
         checkpoint = torch.load(filename, map_location=loc_type)
         epoch = checkpoint.get('epoch', -1)
@@ -521,7 +516,7 @@ class MAE_Range(nn.Module):
 
         if optimizer is not None:
             if 'optimizer_state' in checkpoint and checkpoint['optimizer_state'] is not None:
-                logger.info('==> Loading optimizer parameters from checkpoint %s to %s'
+                print('==> Loading optimizer parameters from checkpoint %s to %s'
                             % (filename, 'CPU' if to_cpu else 'GPU'))
                 optimizer.load_state_dict(checkpoint['optimizer_state'])
             else:
@@ -534,7 +529,7 @@ class MAE_Range(nn.Module):
 
         if 'version' in checkpoint:
             print('==> Checkpoint trained from version: %s' % checkpoint['version'])
-        logger.info('==> Done')
+        print('==> Done')
 
         return it, epoch
 
@@ -705,7 +700,7 @@ class MAE_Image(nn.Module):
 
             if key in state_dict and state_dict[key].shape == val.shape:
                 update_model_state[key] = val
-                # logger.info('Update weight %s: %s' % (key, str(val.shape)))
+                # print('Update weight %s: %s' % (key, str(val.shape)))
 
         if strict:
             self.load_state_dict(update_model_state)
@@ -718,7 +713,7 @@ class MAE_Image(nn.Module):
         if not os.path.isfile(filename):
             raise FileNotFoundError
 
-        logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
+        print('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
         checkpoint = torch.load(filename, map_location=loc_type)
         model_state_disk = checkpoint['model_state']
@@ -729,21 +724,21 @@ class MAE_Image(nn.Module):
             
         version = checkpoint.get("version", None)
         if version is not None:
-            logger.info('==> Checkpoint trained from version: %s' % version)
+            print('==> Checkpoint trained from version: %s' % version)
 
         state_dict, update_model_state = self._load_state_dict(model_state_disk, strict=False)
 
         for key in state_dict:
             if key not in update_model_state:
-                logger.info('Not updated weight %s: %s' % (key, str(state_dict[key].shape)))
+                print('Not updated weight %s: %s' % (key, str(state_dict[key].shape)))
 
-        logger.info('==> Done (loaded %d/%d)' % (len(update_model_state), len(state_dict)))
+        print('==> Done (loaded %d/%d)' % (len(update_model_state), len(state_dict)))
 
     def load_params_with_optimizer(self, filename, to_cpu=False, optimizer=None, logger=None):
         if not os.path.isfile(filename):
             raise FileNotFoundError
 
-        logger.info('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
+        print('==> Loading parameters from checkpoint %s to %s' % (filename, 'CPU' if to_cpu else 'GPU'))
         loc_type = torch.device('cpu') if to_cpu else None
         checkpoint = torch.load(filename, map_location=loc_type)
         epoch = checkpoint.get('epoch', -1)
@@ -753,7 +748,7 @@ class MAE_Image(nn.Module):
 
         if optimizer is not None:
             if 'optimizer_state' in checkpoint and checkpoint['optimizer_state'] is not None:
-                logger.info('==> Loading optimizer parameters from checkpoint %s to %s'
+                print('==> Loading optimizer parameters from checkpoint %s to %s'
                             % (filename, 'CPU' if to_cpu else 'GPU'))
                 optimizer.load_state_dict(checkpoint['optimizer_state'])
             else:
@@ -766,6 +761,6 @@ class MAE_Image(nn.Module):
 
         if 'version' in checkpoint:
             print('==> Checkpoint trained from version: %s' % checkpoint['version'])
-        logger.info('==> Done')
+        print('==> Done')
 
         return it, epoch

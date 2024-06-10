@@ -16,6 +16,7 @@ from .model_mae import mae_vit_base_patch16, mae_vit_large_patch16, mae_vit_huge
 from functools import partial
 from timm.models.vision_transformer import Block
 from pcdet.datasets.kitti.laserscan import LaserScan
+from torch.autograd import Variable
 
 class point_encoder(nn.Module):
     def __init__(self, in_channels, out_channels, scale):
@@ -302,8 +303,10 @@ class SPVCNN_MAE(nn.Module):
         # p2img_idx: 
         # batch_idx: (N_points)
         img_feat = []
-        img_pts_feat = torch.zeros(int(batch_idx.max().item()+1), 256, 1024, self.hiden_size).to(batch_idx.device)
+        img_pts_feat = Variable(torch.zeros(int(batch_idx.max().item()+1), 256, 1024, self.hiden_size)).to(batch_idx.device)
+        
         for b in range(int(batch_idx.max().item()+1)):
+            
             img_feat.append(pts_fea[batch_idx == b][p2img_idx[b]])
 
             img_pts_feat[b, points_img[b][:, 0], points_img[b][:, 1], :] = pts_fea[batch_idx == b][p2img_idx[b]]
@@ -323,9 +326,9 @@ class SPVCNN_MAE(nn.Module):
 
         for b in range(int(batch_idx.max().item()+1)):
             pts_batch = pts_fea[batch_idx == b]
-            pts_img_batch_new = pts_batch.new_zeros(pts_batch.shape[0], self.hiden_size)
-            pts_batch_new = pts_batch.new_zeros(pts_batch.size())
-            pts_batch_new_cls = pts_batch.new_ones(pts_batch.shape[0], 1)
+            pts_img_batch_new = Variable(pts_batch.new_zeros(pts_batch.shape[0], self.hiden_size))
+            pts_batch_new = Variable(pts_batch.new_zeros(pts_batch.size()))
+            pts_batch_new_cls = Variable(pts_batch.new_ones(pts_batch.shape[0], 1))
             pts_sample_points_batch = pts_fea_sample[batch_idx_sample == b]
             pts_batch_new[sample_index[b]] = pts_sample_points_batch
             pts_batch_new_cls[sample_index[b]] -= 1

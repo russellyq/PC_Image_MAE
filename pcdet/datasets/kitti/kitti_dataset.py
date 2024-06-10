@@ -95,10 +95,12 @@ class SemanticKitti(torch_data.Dataset):
         self.learning_map = semkittiyaml['learning_map']
 
         if training:
+            self.imageset = 'train'
             split = semkittiyaml['split']['train']
             if dataset_cfg['train_params'].get('trainval', False):
                 split += semkittiyaml['split']['valid']
         else:
+            self.imageset = 'val'
             split = semkittiyaml['split']['valid']
         
         self.fov_only = True
@@ -117,6 +119,10 @@ class SemanticKitti(torch_data.Dataset):
         self.min_volume_space = dataset_cfg['dataset_params']['min_volume_space']
         self.bottom_crop = dataset_cfg['dataset_params']['bottom_crop']
         self.laserscaner = LaserScan()
+
+        seg_num_per_class = dataset_cfg['dataset_params']['seg_labelweights']
+        seg_labelweights = seg_num_per_class / np.sum(seg_num_per_class)
+        self.seg_labelweights = np.power(np.amax(seg_labelweights) / seg_labelweights, 1 / 3.0)
 
             
     @property
@@ -156,6 +162,7 @@ class SemanticKitti(torch_data.Dataset):
         for key, val in data_dict.items():
             try:
                 if key in ['voxels', 'voxel_num_points']:
+                    
                     if isinstance(val[0], list):
                         batch_size_ratio = len(val[0])
                         val = [i for item in val for i in item]
@@ -261,11 +268,15 @@ class SemanticKitti(torch_data.Dataset):
                         points.append(points_pad)
                     ret[key] = np.stack(points, axis=0)
                 elif key in ['camera_imgs']:
-                    ret[key] = torch.stack([torch.stack(imgs,dim=0) for imgs in val],dim=0)
+                    ret[key] = np.stack([np.stack(imgs,dim=0) for imgs in val],dim=0)
+                    # ret[key] = torch.stack([torch.stack(imgs,dim=0) for imgs in val],dim=0)
                 elif key in ['point2img_index', 'points_img', 'sample_index', 'unsample_index']:
-                    ret[key] = [torch.from_numpy(values).long() for values in val]
+                    ret[key] = [values.astype(np.int) for values in val]
+                    # ret[key] = [torch.from_numpy(values).long() for values in val]
                 elif key in ['sample_points', 'spconv_points']:
-                    ret[key] = torch.cat( [torch.from_numpy(values) for values in val] ).float()
+
+                    # ret[key] = torch.cat( [torch.from_numpy(values) for values in val] ).float()
+                    ret[key] = np.concatenate( [values for values in val] ).astype(np.float)
                     
                     key = key + '_batch_idx'
                     coors = []
@@ -275,10 +286,13 @@ class SemanticKitti(torch_data.Dataset):
                         coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                         coors.append(coor_pad)
                     ret[key] = np.concatenate(coors, axis=0)
+                elif key in ['point_labels']:
 
+                    ret[key] = np.stack( [values for values in val] ).reshape(-1)
+                    
                 else:
-                    print('key: ', key)
-                    print('val: ', val)
+                    # print('key: ', key)
+                    # print('val: ', val)
                     ret[key] = np.stack(val, axis=0)
             except:
                 print('Error in collate_batch: key=%s' % key)
@@ -324,6 +338,20 @@ class SemanticKitti(torch_data.Dataset):
         if self._merge_all_iters_to_one_epoch:
             index = index % len(self.kitti_infos)
 
+        if self.imageset == 'test':
+            annotated_data = np.expand_dims(np.zeros_like(raw_data[:, 0], dtype=int), axis=1)
+            instance_label = np.expand_dims(np.zeros_like(raw_data[:, 0], dtype=int), axis=1)
+        else:
+            annotated_data = np.fromfile(self.im_idx[index].replace('velodyne', 'labels')[:-3] + 'label',
+                                         dtype=np.uint32).reshape((-1, 1))
+            instance_label = annotated_data >> 16
+            annotated_data = annotated_data & 0xFFFF  # delete high 16 digits binary
+            annotated_data = np.vectorize(self.learning_map.__getitem__)(annotated_data)
+
+            if self.config['dataset_params']['ignore_label'] != 0:
+                annotated_data -= 1
+                annotated_data[annotated_data == -1] = self.config['dataset_params']['ignore_label']
+        
         raw_data = np.fromfile(self.im_idx[index], dtype=np.float32).reshape((-1, 4))
         origin_len = len(raw_data)
         points = raw_data[:, :3]
@@ -335,6 +363,8 @@ class SemanticKitti(torch_data.Dataset):
 
         proj_matrix = self.proj_matrix[int(self.im_idx[index][-22:-20])]
 
+        labels = annotated_data.astype(np.uint8)
+        instance_label = instance_label.reshape(-1)
         data = raw_data.copy()
         xyz = points.copy()
         ref_pc = xyz.copy()
@@ -349,6 +379,7 @@ class SemanticKitti(torch_data.Dataset):
         xyz = xyz[mask]
         ref_pc = ref_pc[mask]
         ref_index = ref_index[mask]
+        labels = labels[mask]
 
         # project points into image
         keep_idx = xyz[:, 0] > 0  # only keep point in front of the vehicle
@@ -362,6 +393,7 @@ class SemanticKitti(torch_data.Dataset):
         img_points = np.fliplr(img_points)
         points_img = img_points[keep_idx_img_pts]
 
+        img_labels = labels[keep_idx]
         point2img_index = np.arange(len(xyz))[keep_idx]
 
         # crop image for processing:
@@ -384,6 +416,7 @@ class SemanticKitti(torch_data.Dataset):
         points_img[:, 1] -= left
 
         point2img_index = point2img_index[keep_idx]
+        img_labels = img_labels[keep_idx]
 
         out_dict = self.laserscaner.open_scan(data)
         data_dict['laser_range'] = out_dict['range']
@@ -397,6 +430,8 @@ class SemanticKitti(torch_data.Dataset):
         data_dict['laser_points'] = out_dict['points']
         data_dict['point2img_index'] = point2img_index
         data_dict['points_img'] = points_img
+        data_dict['point_labels'] = labels
+        data_dict['img_labels'] = img_labels
 
         # print('\npoint2img_index', point2img_index.shape)
         # print('points_img', points_img.shape)

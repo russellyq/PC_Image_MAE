@@ -230,6 +230,8 @@ class DatasetTemplate(torch_data.Dataset):
         for key, val in data_dict.items():
             try:
                 if key in ['voxels', 'voxel_num_points']:
+                    # print('key', key)
+                    # print('val', val)
                     if isinstance(val[0], list):
                         batch_size_ratio = len(val[0])
                         val = [i for item in val for i in item]
@@ -256,6 +258,8 @@ class DatasetTemplate(torch_data.Dataset):
                     ret[key] = np.concatenate(coor_pad, axis=0).astype(np.float32)
 
                 elif key in ['points', 'voxel_coords']:
+                    # print('key', key)
+                    # print('val', val)
                     coors = []
                     if isinstance(val[0], list):
                         val =  [i for item in val for i in item]
