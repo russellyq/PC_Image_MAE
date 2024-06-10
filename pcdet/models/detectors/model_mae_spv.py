@@ -17,6 +17,7 @@ from functools import partial
 from timm.models.vision_transformer import Block
 from pcdet.datasets.kitti.laserscan import LaserScan
 from torch.autograd import Variable
+from einops.layers.torch import Rearrange
 
 class point_encoder(nn.Module):
     def __init__(self, in_channels, out_channels, scale):
@@ -272,6 +273,7 @@ class SPVCNN_MAE(nn.Module):
         self.img_size = (256, 1024)
         self.embed_dim = 1024
         self.decoder_embed_dim = 512
+        self.scale_factor = (16, 16)
 
         self.pc_encoder = SPVCNN(hidden_size=self.hiden_size)
         # self.image_encoder = mae_vit_large_patch16(in_chans=3, img_with_size=self.img_size, out_chans=3, with_patch_2d=False)
@@ -284,7 +286,12 @@ class SPVCNN_MAE(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=16, stride=16)
         self.pts_decode = nn.Linear(self.hiden_size * 4, self.decoder_embed_dim, bias=True)
 
-        self.img_conv = nn.Linear(self.embed_dim, self.hiden_size, bias=True)
+        # self.img_conv = nn.Linear(self.embed_dim, self.hiden_size, bias=True)
+        self.img_conv = nn.Sequential(
+            nn.Conv2d(self.embed_dim, self.embed_dim * self.scale_factor[0] * self.scale_factor[1], kernel_size=(1, 1)),
+            Rearrange('b (c s0 s1) h w -> b c (h s0) (w s1)', s0=self.scale_factor[0], s1=self.scale_factor[1]),
+            nn.Conv2d(self.embed_dim, self.hiden_size, kernel_size=(1, 1)),
+        )
 
         self.pc_decoder = SPVCNN_Decoder(hidden_size=self.hiden_size)
 
@@ -320,9 +327,8 @@ class SPVCNN_MAE(nn.Module):
         # batch_idx: (N_points)
         pts_feats = []
         pts_feats_cls = []
-        # img_feats = []
-        img_latent_full = torch.nn.functional.interpolate(img_latent_full[:, 1:, :].reshape(int(batch_idx.max().item()+1), 16, 64, -1).permute(0, 3, 1, 2).contiguous(), 
-                                                          size=(256, 1024), mode='bilinear').permute(0, 2, 3, 1).contiguous()
+
+        img_latent_full = img_latent_full.permute(0, 2,3,1)
 
         for b in range(int(batch_idx.max().item()+1)):
             pts_batch = pts_fea[batch_idx == b]
@@ -333,10 +339,8 @@ class SPVCNN_MAE(nn.Module):
             pts_batch_new[sample_index[b]] = pts_sample_points_batch
             pts_batch_new_cls[sample_index[b]] -= 1
 
-            
             pts_batch_new += pts_batch_new
-            pts_img_batch_new[p2img_idx[b]] = img_latent_full[b, points_img[b][:, 0], points_img[b][:, 1], :]  
-            # img_feats.append( pts_img_batch_new)
+            pts_img_batch_new[p2img_idx[b]] += img_latent_full[b, points_img[b][:, 0], points_img[b][:, 1], :]  
             pts_feats.append(pts_batch_new)
             pts_feats_cls.append(pts_batch_new_cls)
 
@@ -364,8 +368,8 @@ class SPVCNN_MAE(nn.Module):
         # color image encoding
         img_latent, img_mask, img_ids_restore = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
         img_latent_full, img_mask_full, img_ids_restore_full = self.image_encoder.forward_encoder(images, 0)
-        
-        img_latent_full = self.img_conv(img_latent_full)
+
+        img_latent_full = self.img_conv(img_latent_full[:, 1:, :].reshape(Batch_size, self.img_size[0]//self.scale_factor[0], self.img_size[1]//self.scale_factor[1], -1).permute(0, 3, 1, 2))
         # img_latent: (B, L=H*W / 16 / 16 * (1-mask_ratio) + 1=256+1=257, C=1024)
         # img_mask: (B, L=H*W/16/16=1024)   # 0 is keep, 1 is remove
         # img_ids_restore: (B, L=H*W/16/16=1024)

@@ -1,5 +1,5 @@
 DATASET: 'KittiDataset'
-DATA_PATH: '/home/yanqiao/Documents/kitti'
+DATA_PATH: '/media/yanqiao/Seagate Hub/kitti'
 
 POINT_CLOUD_RANGE: [0, -40, -3, 70.4, 40, 1]
 

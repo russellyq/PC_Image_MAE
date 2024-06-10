@@ -19,7 +19,10 @@ from train_utils.train_utils import train_model
 from pcdet.datasets.kitti.laserscan import LaserScan
 import matplotlib.pyplot as plt
 import cv2
-
+# from torchmetrics.functional import multiscale_structural_similarity_index_measure
+import copy
+import numpy as np
+import open3d as o3d
 
 laserscaner = LaserScan()
 
@@ -213,16 +216,23 @@ def main():
     if args.ckpt: 
         model = load_params_with_optimizer(model, args.ckpt)
     else:
-        model = load_params_with_optimizer(model, '/home/yanqiao/OpenPCDet/output/semantic_kitti_models/ckpt/checkpoint_epoch_100.pth')
+        model = load_params_with_optimizer(model, '/home/yanqiao/OpenPCDet/output/semantic_kitti_models/MAE/checkpoints/checkpoint_epoch_100.pth')
     model.to(device)
     model.training = False
     root_dir = '/media/yanqiao/Seagate Hub/semantic-kitti/dataset/sequences/08/pred/'
     os.makedirs(root_dir, exist_ok=True)
+    acc_all = 0
+    length = 4071
+    
     with torch.no_grad():
-        for i in range(10):
+        for i in range(length):
             batch_dict = collect_data(i, cfg.DATA_CONFIG, device)
             pred_dicts, _ = model(batch_dict)
+            acc_all = acc_all + pred_dicts['range_acc']
 
+            print('acc for testing: ', acc_all / (i + 1))
+
+            if i >= 10: continue
             # # saving img parts
             # plt.rcParams['figure.figsize'] = [32, 32]
             # plt.clf()
@@ -349,6 +359,8 @@ def main():
             plt.axis('off')
 
             plt.subplot(5, 1, 5)
+            
+            range_paste_all = pred_dicts['range_paste'][:, :, :]
             range_paste = pred_dicts['range_paste'][:, :, 0]
             range_paste = cv2.normalize(range_paste, None, 0, 1, cv2.NORM_MINMAX)
             plt.imshow(range_paste)
@@ -360,7 +372,52 @@ def main():
 
             print('saving figures: ', i)
 
+            # range_masked = pred_dicts['range_masked']
+            # range_mask_pred = pred_dicts['range_pred'] * pred_dicts['range_mask']
+            # laser_x = batch_dict['laser_x'][0,:,:].int().detach().cpu().numpy()
+            # laser_y = batch_dict['laser_y'][0,:,:].int().detach().cpu().numpy()
+            # laser_range_in = batch_dict['laser_range_in'][0,:,:,:].detach().cpu().numpy()
 
+            # laser_range_in = laser_range_in[laser_y[:, -1], laser_x[:, -1], :][:, 1:4]
+            # range_masked = range_masked[laser_y[:, -1], laser_x[:, -1], :][:, 1:4]
+            # range_mask_pred = range_mask_pred[laser_y[:, -1], laser_x[:, -1], :][:, 1:4]
+
+            # # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
+            # pcd = o3d.geometry.PointCloud()
+            # pcd.points = o3d.utility.Vector3dVector(laser_range_in)
+            # file_name  = root_dir + 'RAW_' + '%06d.ply' % i
+
+            # o3d.io.write_point_cloud(file_name, pcd)
+            # o3d.visualization.draw_geometries([pcd])
+
+            # # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
+            # pcd_mask = o3d.geometry.PointCloud()
+            # pcd_mask.points = o3d.utility.Vector3dVector(range_masked)
+            # file_name  = root_dir + 'RANGE_MASKED_' + '%06d.ply' % i
+
+            # color = np.zeros((range_masked.shape[0], 3))
+            # color[:, 1] = 1 + color[:, 1]
+            # pcd_mask.colors = o3d.utility.Vector3dVector(color)
+
+            # o3d.io.write_point_cloud(file_name, pcd_mask)
+            # o3d.visualization.draw_geometries([pcd_mask])
+
+            # # Pass xyz to Open3D.o3d.geometry.PointCloud and visualize
+            # pcd_pred_mask = o3d.geometry.PointCloud()
+            # pcd_pred_mask.points = o3d.utility.Vector3dVector(range_mask_pred)
+            # file_name  = root_dir + 'RANGE_FULL_' + '%06d.ply' % i
+
+            # color = np.zeros((range_mask_pred.shape[0], 3))
+            # color[:, 2] = 1 + color[:, 2]
+            # pcd_pred_mask.colors = o3d.utility.Vector3dVector(color)
+
+            # o3d.io.write_point_cloud(file_name, pcd_pred_mask)
+            # o3d.visualization.draw_geometries([pcd_pred_mask + pcd_mask])
+
+    
+
+    acc_all = acc_all / length
+    print('acc for testing: ', acc_all)
     # logger.info('**********************End evaluation %s/%s(%s)**********************' %
     #             (cfg.EXP_GROUP_PATH, cfg.TAG, args.extra_tag))
 

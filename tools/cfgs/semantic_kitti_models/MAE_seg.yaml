@@ -1,0 +1,56 @@
+CLASS_NAMES: ['Car', 'Pedestrian', 'Cyclist']
+
+DATA_CONFIG: 
+    _BASE_CONFIG_: cfgs/dataset_configs/semantic_kitti.yaml
+
+
+MODEL:
+    NAME: MAE_Seg
+    PRETRAIN: True
+    train_params:
+        lambda_seg2d: 1
+        lambda_xm: 0.05
+    dataset_params:
+        ignore_label: 0
+        seg_labelweights:
+            - 0
+            - 55437630
+            - 320797
+            - 541736
+            - 2578735
+            - 3274484
+            - 552662
+            - 184064
+            - 78858
+            - 240942562
+            - 17294618
+            - 170599734
+            - 6369672
+            - 230413074
+            - 101130274
+            - 476491114
+            - 9833174
+            - 129609852
+            - 4506626
+            - 1168181
+
+OPTIMIZATION:
+    BATCH_SIZE_PER_GPU: 1
+    NUM_EPOCHS: 100
+
+    OPTIMIZER: adam_onecycle
+    LR: 1.5e-4
+    WEIGHT_DECAY: 0.05
+    MOMENTUM: 0.9
+
+    MOMS: [0.95, 0.85]
+    PCT_START: 0.4
+    DIV_FACTOR: 10
+    DECAY_STEP_LIST: [35, 45]
+    LR_DECAY: 0.1
+    LR_CLIP: 0.0000001
+
+    LR_WARMUP: True
+    WARMUP_EPOCH: 5
+
+    GRAD_NORM_CLIP: 10
