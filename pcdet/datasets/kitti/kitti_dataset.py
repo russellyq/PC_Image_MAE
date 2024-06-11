@@ -286,9 +286,9 @@ class SemanticKitti(torch_data.Dataset):
                         coor_pad = np.pad(coor, ((0, 0), (1, 0)), mode='constant', constant_values=i)
                         coors.append(coor_pad)
                     ret[key] = np.concatenate(coors, axis=0)
-                elif key in ['point_labels']:
+                # elif key in ['point_labels']:
 
-                    ret[key] = np.stack( [values for values in val] ).reshape(-1)
+                #     ret[key] = np.stack( [values for values in val] ).reshape(-1)
                     
                 else:
                     # print('key: ', key)
@@ -430,8 +430,8 @@ class SemanticKitti(torch_data.Dataset):
         data_dict['laser_points'] = out_dict['points']
         data_dict['point2img_index'] = point2img_index
         data_dict['points_img'] = points_img
-        data_dict['point_labels'] = labels
-        data_dict['img_labels'] = img_labels
+        # data_dict['point_labels'] = labels
+        # data_dict['img_labels'] = img_labels
 
         # print('\npoint2img_index', point2img_index.shape)
         # print('points_img', points_img.shape)

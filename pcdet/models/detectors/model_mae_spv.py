@@ -198,7 +198,7 @@ class SPVCNN_Decoder(nn.Module):
         return sp_tensor.features
 
 class SPVCNN(nn.Module):
-    def __init__(self, hidden_size=64):
+    def __init__(self, hidden_size=64, sample_points=True):
         super(SPVCNN, self).__init__()
         self.input_dims = 4
         self.hiden_size = hidden_size
@@ -217,7 +217,7 @@ class SPVCNN(nn.Module):
             coors_range_xyz=self.coors_range_xyz,
             spatial_shape=self.spatial_shape,
             scale_list=self.scale_list,
-            sample_points=True
+            sample_points=sample_points
         )
         # input processing
         self.voxel_3d_generator = voxel_3d_generator(
@@ -225,7 +225,7 @@ class SPVCNN(nn.Module):
             out_channels=self.hiden_size,
             coors_range_xyz=self.coors_range_xyz,
             spatial_shape=self.spatial_shape,
-            sample_points=True
+            sample_points=sample_points
         )
         # encoder layers
         self.spv_enc = nn.ModuleList()
@@ -237,7 +237,7 @@ class SPVCNN(nn.Module):
                 scale=self.scale_list[i],
                 last_scale=self.scale_list[i-1] if i > 0 else 1,
                 spatial_shape=np.int32(self.spatial_shape // self.strides[i])[::-1].tolist(),
-                sample_points=True
+                sample_points=sample_points
                 )
             )
         print('succesfully build SPVCNN encoder')
@@ -257,6 +257,8 @@ class SPVCNN_MAE(nn.Module):
         self.num_class = num_class
         self.dataset = dataset
         self.register_buffer('global_step', torch.LongTensor(1).zero_())
+
+        self.sample_points = False
 
         self.module_topology = [
             'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
