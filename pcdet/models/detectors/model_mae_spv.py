@@ -258,7 +258,7 @@ class SPVCNN_MAE(nn.Module):
         self.dataset = dataset
         self.register_buffer('global_step', torch.LongTensor(1).zero_())
 
-        self.sample_points = False
+        self.sample_points = True
 
         self.module_topology = [
             'vfe', 'backbone_3d', 'map_to_bev_module', 'pfe',
@@ -273,18 +273,21 @@ class SPVCNN_MAE(nn.Module):
 
         self.img_mask_ratio =  0.75
         self.img_size = (256, 1024)
-        self.embed_dim = 1024
-        self.decoder_embed_dim = 512
+        
         self.scale_factor = (16, 16)
 
-        self.pc_encoder = SPVCNN(hidden_size=self.hiden_size)
+        self.pc_encoder = SPVCNN(hidden_size=self.hiden_size, sample_points=self.sample_points)
         # self.image_encoder = mae_vit_large_patch16(in_chans=3, img_with_size=self.img_size, out_chans=3, with_patch_2d=False)
         
-        self.image_encoder = MaskedAutoencoderViT(in_chans=3, img_with_size=self.img_size, out_chans=3, 
-                                                    patch_size=16, embed_dim=self.embed_dim, depth=24, num_heads=16,
-                                                    decoder_embed_dim=self.decoder_embed_dim, decoder_depth=8, decoder_num_heads=16,
-                                                    mlp_ratio=4, norm_layer=partial(nn.LayerNorm, eps=1e-6), with_patch_2d=False)
+        self.image_encoder = MaskedAutoencoderViT(
+            patch_size=16, embed_dim=model_cfg['embed_dim'], depth=model_cfg['depth'], num_heads=model_cfg['num_heads'],
+            decoder_embed_dim=model_cfg['decoder_embed_dim'], decoder_depth=model_cfg['decoder_depth'], decoder_num_heads=model_cfg['decoder_num_heads'],
+            mlp_ratio=4, norm_layer=nn.LayerNorm, in_chans=3, img_with_size=self.img_size, out_chans=3, with_patch_2d=False, norm_pix_loss=True
+        )
         
+        self.embed_dim = model_cfg['decoder_embed_dim']
+        self.decoder_embed_dim = model_cfg['decoder_embed_dim']
+
         self.maxpool = nn.MaxPool2d(kernel_size=16, stride=16)
         self.pts_decode = nn.Linear(self.hiden_size * 4, self.decoder_embed_dim, bias=True)
 
@@ -307,46 +310,68 @@ class SPVCNN_MAE(nn.Module):
     def update_global_step(self):
         self.global_step += 1
     
+    def forward_decoder_img(self, x, ids_restore): # x, ids_restore: (B, L1=H*W/16/16*(1-mask_ratio)+1=257, C) , (B, L2=H*W/16/16=1024)
+        # embed tokens
+        x = self.image_encoder.decoder_embed(x) # (B, L1, D=512)
+
+        # append mask tokens to sequence
+        mask_tokens = self.image_encoder.mask_token.repeat(x.shape[0], ids_restore.shape[1] + 1 - x.shape[1], 1) # (B, L2+1-L1=1024-256=768, D)
+        x_ = torch.cat([x[:, 1:, :], mask_tokens], dim=1)  # no cls token # (B, L2, D)
+        x_ = torch.gather(x_, dim=1, index=ids_restore.unsqueeze(-1).repeat(1, 1, x.shape[2]))  # unshuffle # (B, L2, D)
+        
+        x = torch.cat([x[:, :1, :], x_], dim=1)  # append cls token # (B, L2+1, D)
+
+        # add pos embed
+        x = x + self.image_encoder.decoder_pos_embed # (B, L2+1, D)
+        return x[:, 1:, :]
+    
     def p2img_mapping(self, pts_fea, p2img_idx, batch_idx, points_img):
         # pts_fea: (N_points, C)
         # p2img_idx: 
         # batch_idx: (N_points)
-        img_feat = []
-        img_pts_feat = Variable(torch.zeros(int(batch_idx.max().item()+1), 256, 1024, self.hiden_size)).to(batch_idx.device)
+        pts_feats = []
+        img_pts_feat = Variable(torch.zeros(int(batch_idx.max().item()+1), self.img_size[0], self.img_size[1], self.hiden_size)).to(batch_idx.device)
         
         for b in range(int(batch_idx.max().item()+1)):
             
-            img_feat.append(pts_fea[batch_idx == b][p2img_idx[b]])
+            pts_feats.append(pts_fea[batch_idx == b][p2img_idx[b]])
 
             img_pts_feat[b, points_img[b][:, 0], points_img[b][:, 1], :] = pts_fea[batch_idx == b][p2img_idx[b]]
 
-        return torch.cat(img_feat, 0), img_pts_feat
+        return torch.cat(pts_feats, 0), img_pts_feat
 
     # binary mask: 0 is keep, 1 is remove
     def p2img_mapping_spsample(self, pts_fea, p2img_idx, batch_idx, pts_fea_sample, batch_idx_sample, sample_index, img_latent_full, points_img):
         # pts_fea: (N_points, C)
         # p2img_idx: 
         # batch_idx: (N_points)
+        # img_latent_full: B, C, H, W
         pts_feats = []
         pts_feats_cls = []
+        img_pts_feat = Variable(torch.zeros(int(batch_idx.max().item()+1), self.img_size[0], self.img_size[1], self.hiden_size)).to(batch_idx.device)
 
-        img_latent_full = img_latent_full.permute(0, 2,3,1)
+        img_latent_full = img_latent_full.permute(0,2,3,1).contiguous()
 
         for b in range(int(batch_idx.max().item()+1)):
             pts_batch = pts_fea[batch_idx == b]
-            pts_img_batch_new = Variable(pts_batch.new_zeros(pts_batch.shape[0], self.hiden_size))
+            pts_sample_points_batch = pts_fea_sample[batch_idx_sample == b]
+
             pts_batch_new = Variable(pts_batch.new_zeros(pts_batch.size()))
             pts_batch_new_cls = Variable(pts_batch.new_ones(pts_batch.shape[0], 1))
-            pts_sample_points_batch = pts_fea_sample[batch_idx_sample == b]
+            pts_img_batch_new = Variable(pts_batch.new_zeros(pts_batch.shape[0], self.hiden_size))
+
             pts_batch_new[sample_index[b]] = pts_sample_points_batch
             pts_batch_new_cls[sample_index[b]] -= 1
+            pts_img_batch_new[p2img_idx[b]] = img_latent_full[b, points_img[b][:, 0], points_img[b][:, 1], :]  
 
-            pts_batch_new += pts_batch_new
-            pts_img_batch_new[p2img_idx[b]] += img_latent_full[b, points_img[b][:, 0], points_img[b][:, 1], :]  
+            img_pts_feat[b, points_img[b][:, 0], points_img[b][:, 1], :] = pts_batch_new[p2img_idx[b]]
+
+            pts_batch_new += pts_img_batch_new
+
             pts_feats.append(pts_batch_new)
             pts_feats_cls.append(pts_batch_new_cls)
 
-        return torch.cat(pts_feats, 0), torch.cat(pts_feats_cls, 0)
+        return torch.cat(pts_feats, 0), torch.cat(pts_feats_cls, 0), img_pts_feat
     
     def forward(self, batch_dict):
         batch_dict['batch_idx'] = batch_dict['points'][:, 0]
@@ -369,9 +394,11 @@ class SPVCNN_MAE(nn.Module):
 
         # color image encoding
         img_latent, img_mask, img_ids_restore = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
-        img_latent_full, img_mask_full, img_ids_restore_full = self.image_encoder.forward_encoder(images, 0)
+        # img_latent_full, img_mask_full, img_ids_restore_full = self.image_encoder.forward_encoder(images, 0)
+        img_latent_full = self.forward_decoder_img(img_latent, img_ids_restore)
+        img_latent_full = self.img_conv(img_latent_full.reshape(Batch_size, self.img_size[0]//self.scale_factor[0], self.img_size[1]//self.scale_factor[1], -1).permute(0, 3, 1, 2).contiguous())
+        # img_latent_full: (B, C, H, W)
 
-        img_latent_full = self.img_conv(img_latent_full[:, 1:, :].reshape(Batch_size, self.img_size[0]//self.scale_factor[0], self.img_size[1]//self.scale_factor[1], -1).permute(0, 3, 1, 2))
         # img_latent: (B, L=H*W / 16 / 16 * (1-mask_ratio) + 1=256+1=257, C=1024)
         # img_mask: (B, L=H*W/16/16=1024)   # 0 is keep, 1 is remove
         # img_ids_restore: (B, L=H*W/16/16=1024)
@@ -387,28 +414,28 @@ class SPVCNN_MAE(nn.Module):
         # process spcov features to image
         for idx in range(4):
 
-            # spoconv_points
-            # sp features to image
+            # # spoconv_points
+            # # sp features to image
             points_img = batch_dict['points_img']
-            point2img_index = batch_dict['point2img_index'] # list # (N_pc2img, N_pc2img, ..., ... )
+            # point2img_index = batch_dict['point2img_index'] # list # (N_pc2img, N_pc2img, ..., ... )
             spconv_points_batch_idx = batch_dict['spconv_points_batch_idx'][:, 0]
             pts_feat_f = batch_dict['spconv_points_layer_{}'.format(idx)]['pts_feat_f']
-            point_feat_f, img_pts_feat = self.p2img_mapping(pts_feat_f, point2img_index, spconv_points_batch_idx, points_img)
-            # ( N_PC2img_ba1 + N_PC2img_ba2 + ... ... , 64)
-            point_feat_fs.append(point_feat_f)
-            image_pts_feats.append(img_pts_feat)
-
-            # print('point_feat_f:', point_feat_f.size()) # (N_PC2img_ba1 + N_PC2img_ba2 + ... ..., 64)
-            # print('image_pts_feats:', img_pts_feat.size()) # (B, 256, 1024, 64)
+            # point_feat_f, img_pts_feat = self.p2img_mapping(pts_feat_f, point2img_index, spconv_points_batch_idx, points_img)
+            
+            # # point_feat_f: ( N_PC2img_ba1 + N_PC2img_ba2 + ... ... , 64)
+            # # img_pts_feat: ( B, H, W , C = 64)
+            # point_feat_fs.append(point_feat_f)
+            # image_pts_feats.append(img_pts_feat)
 
             # sample points
             point2img_index = batch_dict['point2img_index'] # list # (N_pc2img, N_pc2img, ..., ... )
             sample_points_batch_idx = batch_dict['sample_points_batch_idx'][:, 0]
             pts_sample_feat_f = batch_dict['sample_points_layer_{}'.format(idx)]['pts_feat_f']
             sample_index = batch_dict['sample_index']
-            sample_point_feat_f, sample_point_feat_f_cls = self.p2img_mapping_spsample(pts_feat_f, point2img_index, spconv_points_batch_idx, pts_sample_feat_f, sample_points_batch_idx, sample_index, img_latent_full, points_img)
+            sample_point_feat_f, sample_point_feat_f_cls, img_pts_feat = self.p2img_mapping_spsample(pts_feat_f, point2img_index, spconv_points_batch_idx, pts_sample_feat_f, sample_points_batch_idx, sample_index, img_latent_full, points_img)
             # ( N_PC2img_ba1 + N_PC2img_ba2 + ... ... , 64)
             sample_point_feat_fs.append(sample_point_feat_f)
+            image_pts_feats.append(img_pts_feat)
 
             # print('sample_point_feat_f:', sample_point_feat_f.size()) # (N_PC2img_ba1 + N_PC2img_ba2 + ... ..., 64)
 

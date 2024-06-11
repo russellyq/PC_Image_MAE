@@ -6,7 +6,13 @@ DATA_CONFIG:
 
 MODEL:
     NAME: SPVCNN_MAE
-
+    embed_dim: 384
+    depth: 12
+    num_heads: 6
+    decoder_embed_dim: 512
+    decoder_depth: 4
+    decoder_num_heads: 8
+    mlp_ratio: 4
     
 
 OPTIMIZATION:
