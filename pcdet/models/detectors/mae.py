@@ -33,10 +33,13 @@ class MAE(nn.Module):
             decoder_embed_dim=model_cfg['decoder_embed_dim'], decoder_depth=model_cfg['decoder_depth'], decoder_num_heads=model_cfg['decoder_num_heads'],
             mlp_ratio=4, norm_layer=nn.LayerNorm, in_chans=3, img_with_size=self.img_size, out_chans=3, with_patch_2d=False, norm_pix_loss=True
         )
+
+
         self.range_encoder = MaskedAutoencoderViT(
             patch_size=16, embed_dim=model_cfg['embed_dim'], depth=model_cfg['depth'], num_heads=model_cfg['num_heads'],
             decoder_embed_dim=model_cfg['decoder_embed_dim'], decoder_depth=model_cfg['decoder_depth'], decoder_num_heads=model_cfg['decoder_num_heads'],
-            mlp_ratio=4, norm_layer=nn.LayerNorm, in_chans=5, img_with_size=self.range_img_size, out_chans=5, with_patch_2d=(2, 8), norm_pix_loss=True
+            mlp_ratio=4, norm_layer=nn.LayerNorm, in_chans=5, img_with_size=self.range_img_size, out_chans=5, with_patch_2d=(2, 8), norm_pix_loss=True,
+            patch_model='ConvStem', hidden_dim=model_cfg['skip_filters']
         )
 
         self.img_patch_size = (self.image_encoder.patch_embed.patch_size[0], self.image_encoder.patch_embed.patch_size[1])
@@ -99,14 +102,14 @@ class MAE(nn.Module):
         images = torch.nn.functional.interpolate(raw_images, size=self.img_size, mode='bilinear')
 
         # color image encoding
-        img_latent, img_mask, img_ids_restore = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
+        img_latent, img_mask, img_ids_restore, _ = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
         # img_latent_full, img_mask_full, img_ids_restore_full = self.image_encoder.forward_encoder(images, 0)
         
         # img_latent: (B, L=H*W / 16 / 16 * (1-mask_ratio) + 1=256+1=257, C=1024)
         # img_mask: (B, L=H*W/16/16=1024)   # 0 is keep, 1 is remove
         # img_ids_restore: (B, L=H*W/16/16=1024)
 
-        range_latent, range_mask, range_ids_restore = self.range_encoder.forward_encoder(laser_range_in, self.range_mask_ratio)
+        range_latent, range_mask, range_ids_restore, _ = self.range_encoder.forward_encoder(laser_range_in, self.range_mask_ratio)
         
         # range_latent_full, range_mask_full, range_ids_restore_full = self.range_encoder.forward_encoder(laser_range_in, 0)
 

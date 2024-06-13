@@ -13,6 +13,8 @@ MODEL:
     decoder_depth: 4
     decoder_num_heads: 8
     mlp_ratio: 4
+    n_clss: 20
+    skip_filters: 128
 
 
     
