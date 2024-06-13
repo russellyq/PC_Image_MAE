@@ -16,7 +16,7 @@ from pathlib import Path
 import yaml
 import random
 
-def make_random_range_mask(pathch_size_h=8, patch_size_w=8, H=64, W=1024, mask_ratio=0.75):
+def make_random_range_mask(pathch_size_h=32, patch_size_w=256, H=64, W=2048, mask_ratio=0.75):
     t_or_f_h = []
     for i in range(pathch_size_h):
         t_or_f_w = []
@@ -118,7 +118,7 @@ class SemanticKitti(torch_data.Dataset):
         self.max_volume_space = dataset_cfg['dataset_params']['max_volume_space']
         self.min_volume_space = dataset_cfg['dataset_params']['min_volume_space']
         self.bottom_crop = dataset_cfg['dataset_params']['bottom_crop']
-        self.laserscaner = LaserScan()
+        self.laserscaner = LaserScan(H=64, W=2048, fov_up=3.0, fov_down=-25.0)
 
         seg_num_per_class = dataset_cfg['dataset_params']['seg_labelweights']
         seg_labelweights = seg_num_per_class / np.sum(seg_num_per_class)
@@ -468,9 +468,7 @@ class SemanticKitti(torch_data.Dataset):
 
         
         t_or_f_range_img = make_random_range_mask()
-        # print('t_or_f_range_img:', t_or_f_range_img)
-        # print('out_dict_y:', out_dict['y'])
-        # print('out_dict_x:', out_dict['x'])
+        
         t_or_f_point = t_or_f_range_img[out_dict['y'].astype(np.int16), out_dict['x'].astype(np.int16)]
         data_dict['sample_points'] = data[t_or_f_point]
         data_dict['sample_index'] = np.arange(len(data))[t_or_f_point]

@@ -6,9 +6,9 @@ DATA_CONFIG:
 
 MODEL:
     NAME: MAE
-    embed_dim: 384
+    embed_dim: 768
     depth: 12
-    num_heads: 6
+    num_heads: 12
     decoder_embed_dim: 512
     decoder_depth: 4
     decoder_num_heads: 8
@@ -20,7 +20,7 @@ MODEL:
     
 
 OPTIMIZATION:
-    BATCH_SIZE_PER_GPU: 1
+    BATCH_SIZE_PER_GPU: 2
     NUM_EPOCHS: 100
 
     OPTIMIZER: adam_onecycle

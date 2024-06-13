@@ -26,7 +26,7 @@ class MAE(nn.Module):
         ]
         self.range_mask_ratio, self.img_mask_ratio = 0.75, 0.75
         self.img_size = (256, 1024)
-        self.range_img_size = (64, 1024)
+        self.range_img_size = (64, 2048)
 
         self.image_encoder = MaskedAutoencoderViT(
             patch_size=16, embed_dim=model_cfg['embed_dim'], depth=model_cfg['depth'], num_heads=model_cfg['num_heads'],
@@ -82,7 +82,7 @@ class MAE(nn.Module):
         # add pos embed
         range_latent_full = range_latent_full + self.range_encoder.decoder_pos_embed # (B, L2+1, D)
         
-        h_img, w_img = 16, 64 # (256, 1024) / (16, 16) = (64, 1024) / (4, 16)
+        h_img, w_img = 16, 64 # (256, 1024) / (16, 16) 
         img_mask_full_tokens_cls_unpatch = img_latent_full[:, 1:, :].reshape(B, h_img, w_img, img_latent_full.shape[-1])
         
         h_img, w_img = self.range_img_size[0] // self.range_patch_size[0], self.range_img_size[1] // self.range_patch_size[1]
