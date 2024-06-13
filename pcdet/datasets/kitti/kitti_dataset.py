@@ -16,25 +16,25 @@ from pathlib import Path
 import yaml
 import random
 
-def make_random_range_mask(pathch_size_h=32, patch_size_w=256, H=64, W=2048, mask_ratio=0.75):
+def make_random_range_mask(patch_size_h=2, patch_size_w=8, H=64, W=2048, mask_ratio=0.75):
     t_or_f_h = []
-    for i in range(pathch_size_h):
+    for i in range(H // patch_size_h):
         t_or_f_w = []
         t_or_f = []
-        w_mask_len = int( W // patch_size_w * mask_ratio)
-        w_unmask_len = int( W // patch_size_w * ( 1 - mask_ratio ))
+        w_mask_len = int( ( W // patch_size_w ) * mask_ratio)
+        w_unmask_len = int( ( W // patch_size_w ) * ( 1 - mask_ratio ))
         for i in range(w_mask_len):
             t_or_f.append(False)
         for i in range(w_unmask_len):
             t_or_f.append(True)
         
-        random.shuffle(t_or_f)
-        t_or_f = np.asarray(t_or_f)
-        t_or_f = t_or_f.repeat(patch_size_w)
-        t_or_f = t_or_f.reshape(1, -1)
-        for i in range(patch_size_w):
+        random.shuffle(t_or_f) # (256)
+        t_or_f = np.asarray(t_or_f) # () # (256)
+        t_or_f = t_or_f.repeat(patch_size_w) # (2048)
+        t_or_f = t_or_f.reshape(1, -1) # (1, 2048)
+        for i in range(patch_size_h):
             t_or_f_w.append(t_or_f)
-        t_or_f_w = np.concatenate(t_or_f_w, axis=0)
+        t_or_f_w = np.concatenate(t_or_f_w, axis=0) # (2, 2048)
         
         t_or_f_h.append(t_or_f_w)
     t_or_f_h = np.concatenate(t_or_f_h, axis=0)

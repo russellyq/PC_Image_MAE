@@ -393,7 +393,7 @@ class SPVCNN_MAE(nn.Module):
         images = torch.nn.functional.interpolate(raw_images, size=self.img_size, mode='bilinear')
 
         # color image encoding
-        img_latent, img_mask, img_ids_restore = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
+        img_latent, img_mask, img_ids_restore, _ = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
         # img_latent_full, img_mask_full, img_ids_restore_full = self.image_encoder.forward_encoder(images, 0)
         img_latent_full = self.forward_decoder_img(img_latent, img_ids_restore)
         img_latent_full = self.img_conv(img_latent_full.reshape(Batch_size, self.img_size[0]//self.scale_factor[0], self.img_size[1]//self.scale_factor[1], -1).permute(0, 3, 1, 2).contiguous())
@@ -417,9 +417,12 @@ class SPVCNN_MAE(nn.Module):
             # # spoconv_points
             # # sp features to image
             points_img = batch_dict['points_img']
+            last_scale = self.scale_list[idx - 1] if idx > 0 else 1
             # point2img_index = batch_dict['point2img_index'] # list # (N_pc2img, N_pc2img, ..., ... )
             spconv_points_batch_idx = batch_dict['spconv_points_batch_idx'][:, 0]
             pts_feat_f = batch_dict['spconv_points_layer_{}'.format(idx)]['pts_feat_f']
+            pts_feat = batch_dict['spconv_points_layer_{}'.format(idx)]['pts_feat']
+            coors_inv = batch_dict['spconv_points_scale_{}'.format(last_scale)]['coors_inv']
             # point_feat_f, img_pts_feat = self.p2img_mapping(pts_feat_f, point2img_index, spconv_points_batch_idx, points_img)
             
             # # point_feat_f: ( N_PC2img_ba1 + N_PC2img_ba2 + ... ... , 64)
@@ -432,7 +435,7 @@ class SPVCNN_MAE(nn.Module):
             sample_points_batch_idx = batch_dict['sample_points_batch_idx'][:, 0]
             pts_sample_feat_f = batch_dict['sample_points_layer_{}'.format(idx)]['pts_feat_f']
             sample_index = batch_dict['sample_index']
-            sample_point_feat_f, sample_point_feat_f_cls, img_pts_feat = self.p2img_mapping_spsample(pts_feat_f, point2img_index, spconv_points_batch_idx, pts_sample_feat_f, sample_points_batch_idx, sample_index, img_latent_full, points_img)
+            sample_point_feat_f, sample_point_feat_f_cls, img_pts_feat = self.p2img_mapping_spsample(pts_feat[coors_inv], point2img_index, spconv_points_batch_idx, pts_sample_feat_f, sample_points_batch_idx, sample_index, img_latent_full, points_img)
             # ( N_PC2img_ba1 + N_PC2img_ba2 + ... ... , 64)
             sample_point_feat_fs.append(sample_point_feat_f)
             image_pts_feats.append(img_pts_feat)
