@@ -103,20 +103,19 @@ class MAE(nn.Module):
 
         # color image encoding
         img_latent, img_mask, img_ids_restore, _ = self.image_encoder.forward_encoder(images, self.img_mask_ratio)
-        # img_latent_full, img_mask_full, img_ids_restore_full = self.image_encoder.forward_encoder(images, 0)
+        img_latent_full, img_mask_full, img_ids_restore_full, _ = self.image_encoder.forward_encoder(images, 0)
         
         # img_latent: (B, L=H*W / 16 / 16 * (1-mask_ratio) + 1=256+1=257, C=1024)
         # img_mask: (B, L=H*W/16/16=1024)   # 0 is keep, 1 is remove
         # img_ids_restore: (B, L=H*W/16/16=1024)
 
         range_latent, range_mask, range_ids_restore, _ = self.range_encoder.forward_encoder(laser_range_in, self.range_mask_ratio)
-        
-        # range_latent_full, range_mask_full, range_ids_restore_full = self.range_encoder.forward_encoder(laser_range_in, 0)
+        range_latent_full, range_mask_full, range_ids_restore_full, _ = self.range_encoder.forward_encoder(laser_range_in, 0)
 
-        # img_latent_full_cls, img_mask_full_tokens_cls_unpatch, range_latent_full_cls, range_mask_full_tokens_cls_unpatch = self.forward_patchfy_unpatchfy_img_range(img_latent_full, img_mask_full, img_ids_restore_full,
-        #                                                                                                                 range_latent_full, range_mask_full, range_ids_restore_full)
-        img_latent_full_cls, img_mask_full_tokens_cls_unpatch, range_latent_full_cls, range_mask_full_tokens_cls_unpatch = self.forward_patchfy_unpatchfy_img_range(img_latent, img_mask, img_ids_restore,
-                                                                                                                        range_latent, range_mask, range_ids_restore)
+        img_latent_full_cls, img_mask_full_tokens_cls_unpatch, range_latent_full_cls, range_mask_full_tokens_cls_unpatch = self.forward_patchfy_unpatchfy_img_range(img_latent_full, img_mask_full, img_ids_restore_full,
+                                                                                                                        range_latent_full, range_mask_full, range_ids_restore_full)
+        # img_latent_full_cls, img_mask_full_tokens_cls_unpatch, range_latent_full_cls, range_mask_full_tokens_cls_unpatch = self.forward_patchfy_unpatchfy_img_range(img_latent, img_mask, img_ids_restore,
+        #                                                                                                                 range_latent, range_mask, range_ids_restore)
         
         
         
